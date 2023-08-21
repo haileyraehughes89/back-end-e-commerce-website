@@ -36,7 +36,7 @@ router.get("/:id", async (req, res) => {
     });
 
     if (!tagData) {
-      res.status(404).json({ message: "No driver found with that id!" });
+      res.status(404).json({ message: "No tag found with that id!" });
       return;
     }
 
@@ -49,71 +49,58 @@ router.get("/:id", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const tagData = await Tag.create(req.body);
-    res.status(200).json(tagData);
+    const { tag_name, product_id } = req.body;
+    const newTag = await Tag.create({
+      tag_name: tag_name,
+    });
+    if (newTag && product_id) {
+      await ProductTag.create({
+        product_id: product_id,
+        tag_id: newTag.id,
+      });
+    }
+    res.status(200).json(newTag);
   } catch (err) {
+    console.error(err);
     res.status(400).json(err);
   }
 });
 
-router.put("/:id", (req, res) => {
-  // update a tag's name by its `id` value
+router.put("/:id", async (req, res) => {
   Tag.update(req.body, {
     where: {
       id: req.params.id,
     },
   })
-    .then((product) => {
-      if (req.body.tagIds && req.body.tagIds.length) {
-        ProductTag.findAll({
-          where: { tag_id: req.params.tag_id },
-        }).then((productTags) => {
-          // create filtered list of new tag_ids
-          const productTagIds = productTags.map(({ tag_id }) => tag_id);
-          const newProductTags = req.body.tagIds
-            .filter((tag_id) => !productTagIds.includes(tag_id))
-            .map((tag_id) => {
-              return {
-                product_id: req.params.id,
-                tag_id,
-              };
-            });
-
-          // figure out which ones to remove
-          const productTagsToRemove = productTags
-            .filter(({ tag_id }) => !req.body.tagIds.includes(tag_id))
-            .map(({ id }) => id);
-          // run both actions
-          return Promise.all([
-            ProductTag.destroy({ where: { id: productTagsToRemove } }),
-            ProductTag.bulkCreate(newProductTags),
-          ]);
-        });
-      }
-
-      return res.json(product);
+    .then(() => {
+      return res.json({ message: "Tag updated" });
     })
-    .catch((err) => {
-      // console.log(err);
-      res.status(400).json(err);
+    .catch((error) => {
+      console.error("Error:", error);
+      return res
+        .status(500)
+        .json({ error: "An error occurred while updating the tag." });
     });
 });
 
 router.delete("/:id", async (req, res) => {
-  // delete on tag by its `id` value
   try {
+    await ProductTag.destroy({
+      where: {
+        tag_id: req.params.id,
+      },
+    });
     const tagData = await Tag.destroy({
       where: {
         id: req.params.id,
       },
     });
-
     if (!tagData) {
       res.status(404).json({ message: "No Tag found with that id!" });
       return;
     }
 
-    res.status(200).json(tagData);
+    res.status(200).json({ message: "Tag successfully deleted" });
   } catch (err) {
     res.status(500).json(err);
   }
